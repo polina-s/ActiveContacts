@@ -1,0 +1,8 @@
+public class ActiveContactsHelper {
+    public static void updateMap(Map<Id, Integer> m, Id ident, Integer value){
+        if(m.containsKey(ident)){
+        	m.put(ident, m.get(ident) + value);
+        } 
+        else {m.put(ident, value);}
+    }
+}
