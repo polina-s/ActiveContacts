@@ -1,0 +1,75 @@
+trigger ActiveContacts on Contact (after insert, after update, before delete, after undelete) {
+    
+    if(Trigger.isInsert || Trigger.isUndelete){
+        List<Account> accs = [SELECT Id, Active_Contacts__c, (SELECT Id FROM Contacts WHERE Id IN :Trigger.New AND Is_Active__c=true) 
+                              FROM Account];
+        for(Account acc: accs){
+            acc.Active_Contacts__c += acc.Contacts.size();
+        }
+        update accs;
+    }
+    
+    if(Trigger.isUpdate){        
+        Boolean oldIsAct;
+        Boolean newIsAct;
+        Id oldAccId;
+        Id newAccId;
+        Map<Id, Integer> accMap = new Map<Id, Integer>();
+        
+        //Make Map of AccountIds and corresponding numbers of changed contacts
+        for(Contact cont: Trigger.New){
+            oldIsAct = Trigger.oldMap.get(cont.Id).Is_Active__c;
+            newIsAct = cont.Is_Active__c;
+            oldAccId = Trigger.oldMap.get(cont.Id).AccountId;
+            newAccId = cont.AccountId;
+            //AccountId changed
+            if(oldAccId != newAccId){
+                if(oldAccId == Null){
+                    if(newIsAct){
+                        ActiveContactsHelper.updateMap(accMap, newAccId, 1);
+                    }
+                } 
+                else if(newAccId == Null){
+                    if(oldIsAct){
+                        ActiveContactsHelper.updateMap(accMap, oldAccId, -1);
+                    }    
+                }
+                else {
+                    if(oldIsAct && !newIsAct){
+                        ActiveContactsHelper.updateMap(accMap, oldAccId, -1);
+                    }
+                    else if(!oldIsAct && newIsAct){
+                        ActiveContactsHelper.updateMap(accMap, newAccId, 1);
+                    }
+                    else if(oldIsAct && newIsAct){
+                        ActiveContactsHelper.updateMap(accMap, oldAccId, -1);
+                        ActiveContactsHelper.updateMap(accMap, newAccId, 1);
+                    }
+                }
+            }
+            //Is_Active changed
+            else if(oldAccId != Null){
+                if(oldIsAct && !newIsAct){
+                    ActiveContactsHelper.updateMap(accMap, oldAccId, -1);
+                }
+                else if(!oldIsAct && newIsAct){
+                    ActiveContactsHelper.updateMap(accMap, newAccId, 1);
+				}
+            }
+        }
+		List<Account> accs = [SELECT Active_Contacts__c FROM Account WHERE Id IN :accMap.keySet()];
+        for(Account acc: accs){
+            acc.Active_Contacts__c += accMap.get(acc.Id);
+        }
+        update accs;
+    }
+    
+    if(Trigger.isDelete){
+        List<Account> accs = [SELECT Id, Active_Contacts__c, (SELECT Id FROM Contacts WHERE Id IN :Trigger.Old AND Is_Active__c=true) 
+                              FROM Account];
+        for(Account acc: accs){
+            acc.Active_Contacts__c -= acc.Contacts.size();
+        }
+        update accs;
+    }
+}
